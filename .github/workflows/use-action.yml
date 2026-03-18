@@ -229,3 +229,150 @@ jobs:
           echo "=== Summary only ==="
           echo "Exit code: ${{ steps.summary-only.outputs.exit-code }}"
           echo "[PASS] Filter options smoke test passed"
+
+  smoke-test-advanced:
+    name: Smoke Test (advanced features)
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Create test manifests
+        run: |
+          mkdir -p /tmp/test-manifests
+          cat > /tmp/test-manifests/deploy.yaml << 'YAML'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: adv-app
+            namespace: default
+            labels:
+              app: advanced
+            annotations:
+              checksum/config: abc123
+          spec:
+            replicas: 2
+            selector:
+              matchLabels:
+                app: advanced
+            template:
+              metadata:
+                labels:
+                  app: advanced
+              spec:
+                containers:
+                  - name: app
+                    image: nginx:1.25
+          YAML
+          cat > /tmp/test-manifests/configmap.yaml << 'YAML'
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: adv-config
+            namespace: default
+          data:
+            key: value
+          YAML
+
+      - name: Setup kind cluster
+        uses: helm/kind-action@v1
+
+      - name: Apply test manifests
+        run: kubectl apply -f /tmp/test-manifests/
+
+      - name: Test table output
+        id: table
+        uses: somaz94/kube-diff-action@v1
+        with:
+          source: file
+          path: /tmp/test-manifests/
+          namespace: default
+          output: table
+          comment: 'false'
+
+      - name: Test ignore-field
+        id: ignore-field
+        uses: somaz94/kube-diff-action@v1
+        with:
+          source: file
+          path: /tmp/test-manifests/
+          namespace: default
+          ignore-field: metadata.annotations.checksum/config
+          output: plain
+          comment: 'false'
+
+      - name: Test context-lines
+        id: context-lines
+        uses: somaz94/kube-diff-action@v1
+        with:
+          source: file
+          path: /tmp/test-manifests/
+          namespace: default
+          context-lines: '1'
+          output: plain
+          comment: 'false'
+
+      - name: Test exit-code (always exit 0)
+        id: exit-code
+        uses: somaz94/kube-diff-action@v1
+        with:
+          source: file
+          path: /tmp/test-manifests/
+          namespace: default
+          exit-code: 'true'
+          output: plain
+          comment: 'false'
+
+      - name: Test diff-strategy last-applied
+        id: diff-strategy
+        uses: somaz94/kube-diff-action@v1
+        with:
+          source: file
+          path: /tmp/test-manifests/
+          namespace: default
+          diff-strategy: last-applied
+          output: plain
+          comment: 'false'
+
+      - name: Introduce drift and test ignore-field
+        run: |
+          kubectl scale deploy/adv-app --replicas=5 -n default
+          sleep 2
+
+      - name: Test ignore-field with drift (ignore replicas)
+        id: ignore-replicas
+        uses: somaz94/kube-diff-action@v1
+        with:
+          source: file
+          path: /tmp/test-manifests/
+          namespace: default
+          ignore-field: spec.replicas
+          output: plain
+          comment: 'false'
+
+      - name: Verify outputs
+        run: |
+          echo "=== Table output ==="
+          echo "Exit code: ${{ steps.table.outputs.exit-code }}"
+          echo "Result: ${{ steps.table.outputs.result }}"
+
+          echo "=== Ignore field ==="
+          echo "Exit code: ${{ steps.ignore-field.outputs.exit-code }}"
+
+          echo "=== Context lines ==="
+          echo "Exit code: ${{ steps.context-lines.outputs.exit-code }}"
+
+          echo "=== Exit code flag ==="
+          echo "Exit code: ${{ steps.exit-code.outputs.exit-code }}"
+
+          echo "=== Diff strategy ==="
+          echo "Exit code: ${{ steps.diff-strategy.outputs.exit-code }}"
+
+          echo "=== Ignore replicas (with drift) ==="
+          echo "Exit code: ${{ steps.ignore-replicas.outputs.exit-code }}"
+          echo "Has changes: ${{ steps.ignore-replicas.outputs.has-changes }}"
+
+          echo "[PASS] Advanced features smoke test passed"
