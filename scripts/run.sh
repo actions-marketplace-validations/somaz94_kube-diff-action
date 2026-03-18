@@ -45,6 +45,22 @@ if [[ "${INPUT_SUMMARY_ONLY}" == "true" ]]; then
   CMD+=(-s)
 fi
 
+if [[ -n "${INPUT_IGNORE_FIELD:-}" ]]; then
+  IFS=',' read -ra FIELDS <<< "${INPUT_IGNORE_FIELD}"
+  for f in "${FIELDS[@]}"; do
+    trimmed=$(echo "${f}" | xargs)
+    CMD+=(--ignore-field "${trimmed}")
+  done
+fi
+
+if [[ -n "${INPUT_CONTEXT_LINES:-}" ]]; then
+  CMD+=(-C "${INPUT_CONTEXT_LINES}")
+fi
+
+if [[ "${INPUT_EXIT_CODE:-false}" == "true" ]]; then
+  CMD+=(--exit-code)
+fi
+
 echo "::group::Running kube-diff"
 echo "Command: ${CMD[*]}"
 

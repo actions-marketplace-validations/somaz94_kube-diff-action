@@ -11,7 +11,9 @@ A GitHub Action that compares local Kubernetes manifests against live cluster st
 
 - Compare **plain YAML**, **Helm charts**, or **Kustomize overlays** against your cluster
 - Auto-post diff results as **PR comments** (updates existing comment on re-run)
-- Multiple output formats: `color`, `plain`, `json`, `markdown`
+- Multiple output formats: `color`, `plain`, `json`, `markdown`, `table`
+- Ignore specific fields in diff with `ignore-field`
+- Configurable context lines and exit code behavior
 - Filter by **namespace**, **kind**, or **label selector**
 - Detects drift: changed, new, deleted, and unchanged resources
 
@@ -104,6 +106,19 @@ jobs:
           exit 1
 ```
 
+### Ignore fields and custom context
+
+```yaml
+- uses: somaz94/kube-diff-action@v1
+  with:
+    source: file
+    path: ./manifests/
+    namespace: production
+    ignore-field: metadata.annotations.checksum/config,spec.replicas
+    context-lines: '5'
+    exit-code: 'true'
+```
+
 ### JSON output for downstream processing
 
 ```yaml
@@ -133,8 +148,11 @@ jobs:
 | `namespace` | Filter by namespace | No | |
 | `kind` | Filter by resource kind (comma-separated) | No | |
 | `selector` | Label selector (e.g., `app=nginx,env=prod`) | No | |
-| `output` | Output format: `color`, `plain`, `json`, `markdown` | No | `markdown` |
+| `output` | Output format: `color`, `plain`, `json`, `markdown`, `table` | No | `markdown` |
 | `summary-only` | Show summary only | No | `false` |
+| `ignore-field` | Field paths to ignore in diff (comma-separated, dot notation) | No | |
+| `context-lines` | Number of context lines in diff output | No | `3` |
+| `exit-code` | Always exit 0 even when changes are detected | No | `false` |
 | `comment` | Post result as PR comment | No | `true` |
 | `version` | kube-diff version to install | No | `latest` |
 | `token` | GitHub token for PR comments | No | `${{ github.token }}` |

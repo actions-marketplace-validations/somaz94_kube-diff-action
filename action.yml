@@ -41,6 +41,18 @@ inputs:
     description: 'Show summary only without diff details'
     required: false
     default: 'false'
+  ignore-field:
+    description: 'Field paths to ignore in diff (comma-separated, dot notation)'
+    required: false
+    default: ''
+  context-lines:
+    description: 'Number of context lines in diff output'
+    required: false
+    default: ''
+  exit-code:
+    description: 'Always exit 0 even when changes are detected'
+    required: false
+    default: 'false'
   comment:
     description: 'Post diff result as PR comment'
     required: false
@@ -87,6 +99,9 @@ runs:
         INPUT_SELECTOR: ${{ inputs.selector }}
         INPUT_OUTPUT: ${{ inputs.output }}
         INPUT_SUMMARY_ONLY: ${{ inputs.summary-only }}
+        INPUT_IGNORE_FIELD: ${{ inputs.ignore-field }}
+        INPUT_CONTEXT_LINES: ${{ inputs.context-lines }}
+        INPUT_EXIT_CODE: ${{ inputs.exit-code }}
       run: ${{ github.action_path }}/scripts/run.sh
 
     - name: Comment on PR
