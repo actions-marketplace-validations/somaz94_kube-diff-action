@@ -33,6 +33,10 @@ if [[ -n "${INPUT_KIND}" ]]; then
   CMD+=(-k "${INPUT_KIND}")
 fi
 
+if [[ -n "${INPUT_NAME:-}" ]]; then
+  CMD+=(-N "${INPUT_NAME}")
+fi
+
 if [[ -n "${INPUT_SELECTOR}" ]]; then
   CMD+=(-l "${INPUT_SELECTOR}")
 fi

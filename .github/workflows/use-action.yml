@@ -209,6 +209,17 @@ jobs:
           output: plain
           comment: 'false'
 
+      - name: Test name filter
+        id: name-filter
+        uses: somaz94/kube-diff-action@v1
+        with:
+          source: file
+          path: /tmp/test-manifests/
+          namespace: default
+          name: web-app
+          output: plain
+          comment: 'false'
+
       - name: Test summary-only
         id: summary-only
         uses: somaz94/kube-diff-action@v1
@@ -226,6 +237,8 @@ jobs:
           echo "Exit code: ${{ steps.kind-filter.outputs.exit-code }}"
           echo "=== Selector filter ==="
           echo "Exit code: ${{ steps.selector-filter.outputs.exit-code }}"
+          echo "=== Name filter ==="
+          echo "Exit code: ${{ steps.name-filter.outputs.exit-code }}"
           echo "=== Summary only ==="
           echo "Exit code: ${{ steps.summary-only.outputs.exit-code }}"
           echo "[PASS] Filter options smoke test passed"

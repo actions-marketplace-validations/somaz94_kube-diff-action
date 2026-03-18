@@ -29,6 +29,10 @@ inputs:
     description: 'Filter by resource kind (comma-separated)'
     required: false
     default: ''
+  name:
+    description: 'Filter by resource name (comma-separated)'
+    required: false
+    default: ''
   selector:
     description: 'Filter by label selector (e.g., app=nginx,env=prod)'
     required: false
@@ -100,6 +104,7 @@ runs:
         INPUT_RELEASE: ${{ inputs.release }}
         INPUT_NAMESPACE: ${{ inputs.namespace }}
         INPUT_KIND: ${{ inputs.kind }}
+        INPUT_NAME: ${{ inputs.name }}
         INPUT_SELECTOR: ${{ inputs.selector }}
         INPUT_OUTPUT: ${{ inputs.output }}
         INPUT_SUMMARY_ONLY: ${{ inputs.summary-only }}
