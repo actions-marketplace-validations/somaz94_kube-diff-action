@@ -61,6 +61,10 @@ if [[ "${INPUT_EXIT_CODE:-false}" == "true" ]]; then
   CMD+=(--exit-code)
 fi
 
+if [[ -n "${INPUT_DIFF_STRATEGY:-}" ]]; then
+  CMD+=(--diff-strategy "${INPUT_DIFF_STRATEGY}")
+fi
+
 echo "::group::Running kube-diff"
 echo "Command: ${CMD[*]}"
 

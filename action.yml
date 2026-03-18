@@ -53,6 +53,10 @@ inputs:
     description: 'Always exit 0 even when changes are detected'
     required: false
     default: 'false'
+  diff-strategy:
+    description: 'Comparison strategy: live (cluster state) or last-applied (annotation)'
+    required: false
+    default: ''
   comment:
     description: 'Post diff result as PR comment'
     required: false
@@ -102,6 +106,7 @@ runs:
         INPUT_IGNORE_FIELD: ${{ inputs.ignore-field }}
         INPUT_CONTEXT_LINES: ${{ inputs.context-lines }}
         INPUT_EXIT_CODE: ${{ inputs.exit-code }}
+        INPUT_DIFF_STRATEGY: ${{ inputs.diff-strategy }}
       run: ${{ github.action_path }}/scripts/run.sh
 
     - name: Comment on PR

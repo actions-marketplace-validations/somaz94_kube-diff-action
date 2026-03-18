@@ -13,7 +13,8 @@ A GitHub Action that compares local Kubernetes manifests against live cluster st
 - Auto-post diff results as **PR comments** (updates existing comment on re-run)
 - Multiple output formats: `color`, `plain`, `json`, `markdown`, `table`
 - Ignore specific fields in diff with `ignore-field`
-- Configurable context lines and exit code behavior
+- Configurable context lines, exit code behavior, and diff strategy
+- Compare against live state or `last-applied-configuration` annotation
 - Filter by **namespace**, **kind**, or **label selector**
 - Detects drift: changed, new, deleted, and unchanged resources
 
@@ -119,6 +120,17 @@ jobs:
     exit-code: 'true'
 ```
 
+### Compare against last-applied-configuration
+
+```yaml
+- uses: somaz94/kube-diff-action@v1
+  with:
+    source: file
+    path: ./manifests/
+    namespace: production
+    diff-strategy: last-applied
+```
+
 ### JSON output for downstream processing
 
 ```yaml
@@ -153,6 +165,7 @@ jobs:
 | `ignore-field` | Field paths to ignore in diff (comma-separated, dot notation) | No | |
 | `context-lines` | Number of context lines in diff output | No | `3` |
 | `exit-code` | Always exit 0 even when changes are detected | No | `false` |
+| `diff-strategy` | Comparison strategy: `live` or `last-applied` | No | `live` |
 | `comment` | Post result as PR comment | No | `true` |
 | `version` | kube-diff version to install | No | `latest` |
 | `token` | GitHub token for PR comments | No | `${{ github.token }}` |
