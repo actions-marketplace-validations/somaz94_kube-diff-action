@@ -1,0 +1,99 @@
+name: kube-diff Action
+description: Compare local Kubernetes manifests against live cluster state and report drift
+author: somaz94
+
+branding:
+  icon: git-pull-request
+  color: blue
+
+inputs:
+  source:
+    description: 'Source type: file, helm, or kustomize'
+    required: true
+  path:
+    description: 'Path to manifests, Helm chart, or Kustomize overlay'
+    required: true
+  values:
+    description: 'Helm values files (comma-separated)'
+    required: false
+    default: ''
+  release:
+    description: 'Helm release name'
+    required: false
+    default: 'release'
+  namespace:
+    description: 'Filter by namespace'
+    required: false
+    default: ''
+  kind:
+    description: 'Filter by resource kind (comma-separated)'
+    required: false
+    default: ''
+  selector:
+    description: 'Filter by label selector (e.g., app=nginx,env=prod)'
+    required: false
+    default: ''
+  output:
+    description: 'Output format for diff result: color, plain, json, markdown'
+    required: false
+    default: 'markdown'
+  summary-only:
+    description: 'Show summary only without diff details'
+    required: false
+    default: 'false'
+  comment:
+    description: 'Post diff result as PR comment'
+    required: false
+    default: 'true'
+  version:
+    description: 'kube-diff version to install (e.g., v0.2.0). Default: latest'
+    required: false
+    default: 'latest'
+  token:
+    description: 'GitHub token for PR comments'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  result:
+    description: 'Diff output text'
+    value: ${{ steps.diff.outputs.result }}
+  exit-code:
+    description: 'Exit code from kube-diff (0=no changes, 1=changes detected)'
+    value: ${{ steps.diff.outputs.exit-code }}
+  has-changes:
+    description: 'Whether changes were detected (true/false)'
+    value: ${{ steps.diff.outputs.has-changes }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install kube-diff
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: ${{ github.action_path }}/scripts/install.sh
+
+    - name: Run kube-diff
+      id: diff
+      shell: bash
+      env:
+        INPUT_SOURCE: ${{ inputs.source }}
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_VALUES: ${{ inputs.values }}
+        INPUT_RELEASE: ${{ inputs.release }}
+        INPUT_NAMESPACE: ${{ inputs.namespace }}
+        INPUT_KIND: ${{ inputs.kind }}
+        INPUT_SELECTOR: ${{ inputs.selector }}
+        INPUT_OUTPUT: ${{ inputs.output }}
+        INPUT_SUMMARY_ONLY: ${{ inputs.summary-only }}
+      run: ${{ github.action_path }}/scripts/run.sh
+
+    - name: Comment on PR
+      if: inputs.comment == 'true' && github.event_name == 'pull_request' && steps.diff.outputs.result != ''
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        DIFF_RESULT: ${{ steps.diff.outputs.result }}
+        HAS_CHANGES: ${{ steps.diff.outputs.has-changes }}
+      run: ${{ github.action_path }}/scripts/comment.sh

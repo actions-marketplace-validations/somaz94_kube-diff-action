@@ -1,0 +1,154 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run ShellCheck
+        uses: ludeeus/action-shellcheck@master
+        with:
+          scandir: scripts
+
+  test-install:
+    name: Test Install Script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test install (latest)
+        env:
+          VERSION: latest
+        run: |
+          sudo bash scripts/install.sh
+          kube-diff version
+
+  test-action-file:
+    name: Test Action (file mode)
+    runs-on: ubuntu-latest
+    needs: [shellcheck, test-install]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create test manifests
+        run: |
+          mkdir -p /tmp/test-manifests
+          cat > /tmp/test-manifests/configmap.yaml << 'YAML'
+          apiVersion: v1
+          kind: ConfigMap
+          metadata:
+            name: test-config
+            namespace: default
+          data:
+            key: value
+          YAML
+
+      - name: Setup kind cluster
+        uses: helm/kind-action@v1
+
+      - name: Apply test manifests
+        run: kubectl apply -f /tmp/test-manifests/
+
+      - name: Run kube-diff action
+        id: diff
+        uses: ./
+        with:
+          source: file
+          path: /tmp/test-manifests/
+          namespace: default
+          output: markdown
+          comment: 'false'
+
+      - name: Verify outputs
+        run: |
+          echo "Exit code: ${{ steps.diff.outputs.exit-code }}"
+          echo "Has changes: ${{ steps.diff.outputs.has-changes }}"
+          echo "Result: ${{ steps.diff.outputs.result }}"
+
+  test-action-helm:
+    name: Test Action (helm mode)
+    runs-on: ubuntu-latest
+    needs: [shellcheck, test-install]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup kind cluster
+        uses: helm/kind-action@v1
+
+      - name: Create test chart
+        run: |
+          mkdir -p /tmp/test-chart/templates
+          cat > /tmp/test-chart/Chart.yaml << 'YAML'
+          apiVersion: v2
+          name: test-chart
+          version: 0.1.0
+          YAML
+          cat > /tmp/test-chart/values.yaml << 'YAML'
+          replicas: 1
+          image: nginx:1.25
+          YAML
+          cat > /tmp/test-chart/templates/deployment.yaml << 'YAML'
+          apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: test-app
+          spec:
+            replicas: {{ .Values.replicas }}
+            selector:
+              matchLabels:
+                app: test
+            template:
+              metadata:
+                labels:
+                  app: test
+              spec:
+                containers:
+                  - name: app
+                    image: {{ .Values.image }}
+          YAML
+
+      - name: Run kube-diff action (helm)
+        id: diff
+        uses: ./
+        with:
+          source: helm
+          path: /tmp/test-chart/
+          release: test-release
+          output: json
+          comment: 'false'
+
+      - name: Verify outputs
+        run: |
+          echo "Exit code: ${{ steps.diff.outputs.exit-code }}"
+          echo "Has changes: ${{ steps.diff.outputs.has-changes }}"
+
+  ci-result:
+    name: CI Result
+    if: always()
+    needs: [shellcheck, test-install, test-action-file, test-action-helm]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          if [[ "${{ needs.shellcheck.result }}" != "success" ]] || \
+             [[ "${{ needs.test-install.result }}" != "success" ]] || \
+             [[ "${{ needs.test-action-file.result }}" != "success" ]] || \
+             [[ "${{ needs.test-action-helm.result }}" != "success" ]]; then
+            echo "::error::One or more CI jobs failed"
+            exit 1
+          fi
+          echo "All CI jobs passed"
