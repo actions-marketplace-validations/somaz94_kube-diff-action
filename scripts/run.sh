@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Validate source type
 case "${INPUT_SOURCE}" in
   file|helm|kustomize) ;;
   *) echo "::error::Invalid source type '${INPUT_SOURCE}'. Must be: file, helm, or kustomize"; exit 1 ;;
@@ -10,7 +9,6 @@ esac
 # Build command as array (safer than eval)
 CMD=(kube-diff "${INPUT_SOURCE}" "${INPUT_PATH}")
 
-# Add helm-specific flags
 if [[ "${INPUT_SOURCE}" == "helm" ]]; then
   if [[ -n "${INPUT_VALUES}" ]]; then
     IFS=',' read -ra VALUES <<< "${INPUT_VALUES}"
@@ -24,7 +22,6 @@ if [[ "${INPUT_SOURCE}" == "helm" ]]; then
   fi
 fi
 
-# Add global flags
 if [[ -n "${INPUT_NAMESPACE}" ]]; then
   CMD+=(-n "${INPUT_NAMESPACE}")
 fi
@@ -65,10 +62,6 @@ if [[ -n "${INPUT_CONTEXT_LINES:-}" ]]; then
   CMD+=(-C "${INPUT_CONTEXT_LINES}")
 fi
 
-if [[ "${INPUT_EXIT_CODE:-false}" == "true" ]]; then
-  CMD+=(--exit-code)
-fi
-
 if [[ -n "${INPUT_DIFF_STRATEGY:-}" ]]; then
   CMD+=(--diff-strategy "${INPUT_DIFF_STRATEGY}")
 fi
@@ -76,23 +69,42 @@ fi
 echo "::group::Running kube-diff"
 echo "Command: ${CMD[*]}"
 
-# Run kube-diff and capture output
+STDERR_FILE=$(mktemp)
+trap 'rm -f "${STDERR_FILE}"' EXIT
+
 set +e
-RESULT=$("${CMD[@]}" 2>&1)
-EXIT_CODE=$?
+RESULT=$("${CMD[@]}" 2>"${STDERR_FILE}")
+KUBE_DIFF_EXIT=$?
 set -e
 
 echo "${RESULT}"
+cat "${STDERR_FILE}" >&2
 echo "::endgroup::"
 
-# Set outputs
+# kube-diff exits 2 on error since v0.5.3; older releases exit 1 for errors too, and only their "Error: " line tells them from drift.
+ERROR_LINE=$(grep -m1 '^Error: ' "${STDERR_FILE}" || true)
+if [[ ${KUBE_DIFF_EXIT} -eq 0 ]]; then
+  EXIT_CODE=0
+elif [[ ${KUBE_DIFF_EXIT} -eq 1 && -z "${ERROR_LINE}" ]]; then
+  EXIT_CODE=1
+else
+  EXIT_CODE=2
+fi
+
+HAS_CHANGES=false
+if [[ ${EXIT_CODE} -eq 1 ]]; then
+  HAS_CHANGES=true
+fi
+
+# kube-diff's own --exit-code would hide drift from has-changes, so the input only masks the reported code.
+REPORTED_EXIT_CODE=${EXIT_CODE}
+if [[ "${HAS_CHANGES}" == "true" && "${INPUT_EXIT_CODE:-false}" == "true" ]]; then
+  REPORTED_EXIT_CODE=0
+fi
+
 {
-  echo "exit-code=${EXIT_CODE}"
-  if [[ ${EXIT_CODE} -eq 1 ]]; then
-    echo "has-changes=true"
-  else
-    echo "has-changes=false"
-  fi
+  echo "exit-code=${REPORTED_EXIT_CODE}"
+  echo "has-changes=${HAS_CHANGES}"
 } >> "${GITHUB_OUTPUT}"
 
 # Handle multiline result output
@@ -102,9 +114,7 @@ echo "::endgroup::"
   echo "KUBE_DIFF_EOF"
 } >> "${GITHUB_OUTPUT}"
 
-# Exit code 0 (no changes) and 1 (changes detected) are both success for the action
-# Only exit code 2 (error) should fail the action
 if [[ ${EXIT_CODE} -eq 2 ]]; then
-  echo "::error::kube-diff encountered an error"
+  echo "::error::kube-diff failed (exit ${KUBE_DIFF_EXIT}): ${ERROR_LINE#Error: }"
   exit 1
 fi
